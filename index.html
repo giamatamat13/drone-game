@@ -268,7 +268,7 @@
             // מנגנון זיהוי עמידה במקום
             lastHeight: 300,
             heightTimer: 0,
-            campThreshold: 180, // 3 שניות ב-60 FPS
+            campThreshold: 180, // ברירת מחדל: 3 שניות ב-60 FPS
             drone: {
                 x: 150, y: 300,
                 size: 18,
@@ -303,18 +303,22 @@
                 case 'easy':
                     gameState.minThrust = 1; gameState.maxThrust = 4; 
                     gameState.spawnRate = 160; gameState.drone.baseAcc = 0.2;
+                    gameState.campThreshold = 240; // 4 שניות
                     break;
                 case 'normal':
                     gameState.minThrust = 2; gameState.maxThrust = 7; 
                     gameState.spawnRate = 100; gameState.drone.baseAcc = 0.35;
+                    gameState.campThreshold = 180; // 3 שניות
                     break;
                 case 'hard':
                     gameState.minThrust = 3; gameState.maxThrust = 10; 
                     gameState.spawnRate = 60; gameState.drone.baseAcc = 0.5;
+                    gameState.campThreshold = 120; // 2 שניות
                     break;
                 case 'impossible':
                     gameState.minThrust = 5; gameState.maxThrust = 15; 
                     gameState.spawnRate = 30; gameState.drone.baseAcc = 0.7;
+                    gameState.campThreshold = 60; // 1 שנייה בלבד! חייב לזוז כל הזמן
                     break;
             }
             
@@ -372,7 +376,10 @@
             gameState.lastHeight = d.y;
 
             const warningEl = document.getElementById('antiCampWarning');
-            if (gameState.heightTimer > gameState.campThreshold * 0.6) {
+            // ב-impossible ההתראה מופיעה מהר מאוד
+            const warningLimit = difficulty === 'impossible' ? gameState.campThreshold * 0.3 : gameState.campThreshold * 0.6;
+            
+            if (gameState.heightTimer > warningLimit) {
                 warningEl.style.display = 'block';
             } else {
                 warningEl.style.display = 'none';
