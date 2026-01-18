@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FPV NEON - Multiplayer Sync</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Courier New', monospace;
+            background: #020205;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            color: #00ff00;
+        }
+        #gameContainer {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background: radial-gradient(circle at center, #1e1b4b 0%, #020617 100%);
+            border: 4px solid #1e293b;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5), inset 0 0 100px rgba(0,0,0,0.8);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #gameCanvas { display: block; width: 100%; height: 100%; }
+        
+        #osd {
+            position: absolute;
+            top: 20px; left: 20px; right: 20px;
+            display: none;
+            justify-content: space-between;
+            color: #00ff00;
+            font-size: 16px;
+            z-index: 20;
+            text-shadow: 0 0 8px rgba(0, 255, 0, 0.8);
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(2, 6, 23, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 30;
+        }
+
+        .menu-card {
+            background: rgba(0, 20, 0, 0.8);
+            padding: 40px;
+            border-radius: 15px;
+            border: 2px solid #00ff00;
+            text-align: center;
+            width: 500px;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.2);
+        }
+
+        .glitch {
+            font-size: 48px;
+            font-weight: bold;
+            letter-spacing: 5px;
+            margin-bottom: 25px;
+            color: #00ff00;
+            text-shadow: 2px 2px #ff00ff;
+        }
+
+        .input-group { margin: 20px 0; }
+        input {
+            background: #000;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            padding: 12px;
+            font-family: inherit;
+            text-align: center;
+            width: 250px;
+            font-size: 18px;
+            outline: none;
+        }
+
+        .btn {
+            padding: 12px 25px;
+            background: transparent;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: bold;
+            transition: 0.3s;
+            margin: 10px;
+            text-transform: uppercase;
+        }
+
+        .btn:hover {
+            background: #00ff00;
+            color: #000;
+            box-shadow: 0 0 20px #00ff00;
+        }
+
+        #statusText { margin-top: 15px; font-size: 14px; color: #00ccff; }
+        #playerList { margin: 15px 0; font-size: 14px; color: #fff; text-align: right; }
+        #gameOver { display: none; }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="osd">
+            <div id="roomCodeDisplay">ROOM: ----</div>
+            <div id="statsDisplay">SCORE: <span id="score">0</span></div>
+            <div id="pilotDisplay">PILOT: <span id="pilotNameDisplay">---</span></div>
+        </div>
+
+        <!-- Connection Screen -->
+        <div id="menu" class="overlay">
+            <div class="menu-card">
+                <div class="glitch">FPV MULTIPLAYER</div>
+                
+                <div id="step-1">
+                    <p>הכנס כינוי טייס:</p>
+                    <div class="input-group">
+                        <input type="text" id="pilotName" maxlength="10" placeholder="PILOT-01">
+                    </div>
+                    <button class="btn" id="nextBtn">המשך</button>
+                </div>
+
+                <div id="step-2" style="display:none;">
+                    <p>הכנס קוד חדר להתחברות:</p>
+                    <div class="input-group">
+                        <input type="text" id="roomInput" maxlength="6" placeholder="קוד חדר">
+                    </div>
+                    <button class="btn" id="connectBtn">התחבר לשרת</button>
+                    <div id="statusText">ממתין לפעולה...</div>
+                </div>
+
+                <div id="step-3" style="display:none;">
+                    <p>חדר: <span id="currentRoom" style="color:#fff"></span></p>
+                    <div id="playerList"></div>
+                    <p id="hostMessage" style="font-size: 12px; color: #888; margin-bottom: 15px;"></p>
+                    <button class="btn" id="startBtn" style="display:none;">הפעל מנועים (START)</button>
+                    <div id="waitMessage">ממתין למנהל החדר שיתחיל...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameOver" class="overlay">
+            <div class="menu-card" style="border-color: #ff0044;">
+                <div class="glitch" style="color:#ff0044">SIGNAL LOST</div>
+                <p>התרסקת! המתן לסיום הסיבוב או התחבר מחדש.</p>
+                <div id="finalScoreDisplay" style="font-size: 24px; margin: 20px 0;">SCORE: 0</div>
+                <button class="btn" onclick="location.reload()" style="border-color:#ff0044; color:#ff0044">חזרה לתפריט</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, doc, setDoc, onSnapshot, updateDoc, collection, deleteDoc, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // Firebase Initialization
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'fpv-neon-sync';
+
+        let userId = null;
+        let roomId = null;
+        let isHost = false;
+        let myName = "";
+        let players = {};
+        let obstacles = [];
+        let gameActive = false;
+        let score = 0;
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 800; canvas.height = 600;
+
+        const drone = { x: 150, y: 300, vy: 0, size: 18 };
+        const keys = {};
+        window.onkeydown = (e) => keys[e.key.toLowerCase()] = true;
+        window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
+
+        // Auth Logic
+        const initAuth = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                userId = user.uid;
+                console.log("Authenticated as:", userId);
+            }
+        });
+
+        // UI Event Listeners (Modern approach to avoid window issues)
+        document.getElementById('nextBtn').addEventListener('click', () => {
+            myName = document.getElementById('pilotName').value.trim();
+            if (!myName) {
+                document.getElementById('pilotName').style.borderColor = "red";
+                return;
+            }
+            document.getElementById('step-1').style.display = 'none';
+            document.getElementById('step-2').style.display = 'block';
+        });
+
+        document.getElementById('connectBtn').addEventListener('click', async () => {
+            const input = document.getElementById('roomInput').value.trim().toUpperCase();
+            if (!input) return;
+            roomId = input;
+            await connectToRoom();
+        });
+
+        document.getElementById('startBtn').addEventListener('click', async () => {
+            if (!isHost) return;
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId);
+            await updateDoc(roomRef, { status: 'playing' });
+        });
+
+        const connectToRoom = async () => {
+            if (!userId) await initAuth();
+
+            document.getElementById('statusText').innerText = "מתחבר...";
+            
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId);
+            const roomSnap = await getDoc(roomRef);
+            
+            if (!roomSnap.exists()) {
+                isHost = true;
+                await setDoc(roomRef, { 
+                    status: 'lobby', 
+                    hostId: userId,
+                    obstacles: [],
+                    score: 0 
+                });
+            } else {
+                const data = roomSnap.data();
+                if (data.hostId === userId) isHost = true;
+            }
+
+            // Register Player
+            const playerRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId, 'players', userId);
+            await setDoc(playerRef, {
+                name: myName,
+                y: 300,
+                alive: true,
+                lastSeen: Date.now()
+            });
+
+            initLobbyListeners();
+        };
+
+        function initLobbyListeners() {
+            document.getElementById('step-2').style.display = 'none';
+            document.getElementById('step-3').style.display = 'block';
+            document.getElementById('currentRoom').innerText = roomId;
+            document.getElementById('pilotNameDisplay').innerText = myName;
+            document.getElementById('roomCodeDisplay').innerText = `ROOM: ${roomId}`;
+
+            // Player List Listener
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId, 'players'), (snap) => {
+                const list = document.getElementById('playerList');
+                list.innerHTML = "טייסים בחדר:<br>";
+                players = {};
+                snap.forEach(d => {
+                    players[d.id] = d.data();
+                    list.innerHTML += `> ${d.data().name} ${d.id === userId ? '(אתה)' : ''}<br>`;
+                });
+            }, (err) => console.error("Snapshot error:", err));
+
+            // Room State Listener (Obstacles & Start)
+            onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId), (snap) => {
+                const data = snap.data();
+                if(!data) return;
+
+                if (data.status === 'playing' && !gameActive) {
+                    startGame();
+                }
+                
+                // Sync obstacles from Host
+                if (!isHost) {
+                    obstacles = data.obstacles || [];
+                    score = data.score || 0;
+                }
+            }, (err) => console.error("Room snapshot error:", err));
+
+            if (isHost) {
+                document.getElementById('startBtn').style.display = 'inline-block';
+                document.getElementById('waitMessage').style.display = 'none';
+                document.getElementById('hostMessage').innerText = "אתה מנהל החדר. לחץ להתחלת המשחק עבור כולם.";
+            }
+        }
+
+        function startGame() {
+            gameActive = true;
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('osd').style.display = 'flex';
+            
+            // Start sync loop
+            setInterval(syncMyPos, 50);
+            if(isHost) setInterval(syncGameWorld, 100);
+        }
+
+        async function syncMyPos() {
+            if(!userId || !roomId) return;
+            const playerRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId, 'players', userId);
+            await updateDoc(playerRef, { y: drone.y, alive: gameActive });
+        }
+
+        async function syncGameWorld() {
+            if(!isHost || !gameActive || !roomId) return;
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId);
+            await updateDoc(roomRef, { 
+                obstacles: obstacles,
+                score: score
+            });
+        }
+
+        function createObstacle() {
+            return {
+                x: 850,
+                y: Math.random() * 500 + 50,
+                size: 40 + Math.random() * 30,
+                id: Math.random().toString(36).substr(2, 9)
+            };
+        }
+
+        function update() {
+            if (!gameActive) return;
+
+            // Movement
+            if (keys['w'] || keys['arrowup']) drone.vy -= 0.4;
+            if (keys['s'] || keys['arrowdown']) drone.vy += 0.4;
+            drone.vy *= 0.94;
+            drone.y += drone.vy;
+            drone.y = Math.max(20, Math.min(580, drone.y));
+
+            // World updates (Only host calculates new positions)
+            if (isHost) {
+                const speed = 6 + (score * 0.1);
+                
+                if (obstacles.length === 0 || obstacles[obstacles.length-1].x < 550) {
+                    obstacles.push(createObstacle());
+                }
+
+                for (let i = obstacles.length - 1; i >= 0; i--) {
+                    obstacles[i].x -= speed;
+                    if (obstacles[i].x < -100) {
+                        obstacles.splice(i, 1);
+                        score++;
+                    }
+                }
+            }
+
+            // Collision check (Every player checks for themselves)
+            obstacles.forEach(obs => {
+                const dx = drone.x - obs.x;
+                const dy = drone.y - obs.y;
+                if (Math.sqrt(dx*dx + dy*dy) < drone.size + obs.size * 0.4) {
+                    die();
+                }
+            });
+
+            document.getElementById('score').innerText = score;
+        }
+
+        function die() {
+            gameActive = false;
+            document.getElementById('gameOver').style.display = 'flex';
+            document.getElementById('finalScoreDisplay').innerText = `SCORE: ${score}`;
+            syncMyPos();
+        }
+
+        function draw() {
+            ctx.fillStyle = "#020617";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Obstacles
+            obstacles.forEach(obs => {
+                ctx.strokeStyle = "#ff00ff";
+                ctx.lineWidth = 3;
+                ctx.strokeRect(obs.x - obs.size/2, obs.y - obs.size/2, obs.size, obs.size);
+                ctx.shadowBlur = 10; ctx.shadowColor = "#ff00ff";
+            });
+
+            // Other Players
+            Object.keys(players).forEach(id => {
+                if(id !== userId && players[id].alive) {
+                    drawDrone(150, players[id].y, players[id].name, true);
+                }
+            });
+
+            // Me
+            if(gameActive) drawDrone(drone.x, drone.y, "YOU", false);
+        }
+
+        function drawDrone(x, y, label, isRemote) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = isRemote ? "#0066ff" : "#00ff00";
+            
+            ctx.fillStyle = "#fff";
+            ctx.font = "10px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(label, 0, -20);
+
+            ctx.strokeStyle = isRemote ? "#0066ff" : "#00ff00";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-12, -12); ctx.lineTo(12, 12);
+            ctx.moveTo(12, -12); ctx.lineTo(-12, 12);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        loop();
+
+        // Cleanup
+        window.onbeforeunload = async () => {
+            if(userId && roomId) {
+                const playerRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId, 'players', userId);
+                await deleteDoc(playerRef);
+            }
+        };
+
+        // Initial Auth Start
+        initAuth();
+    </script>
+</body>
+</html>
