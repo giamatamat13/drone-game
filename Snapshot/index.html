@@ -157,20 +157,24 @@
         import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        /** * הגדרות FIREBASE - חשוב מאוד!
-         * עליך להעתיק לכאן את האובייקט שקיבלת מה-Firebase Console (תחת Project Settings)
-         * כדי שהמולטיפלייר יעבוד ב-GitHub Pages.
+        /** * הגדרות FIREBASE למולטיפלייר (GitHub Pages)
+         * 1. היכנס ל-Firebase Console (console.firebase.google.com)
+         * 2. בחר את הפרויקט שלך -> Project Settings (גלגל שיניים למעלה)
+         * 3. תחת "Your apps", אם אין אפליקציית Web, צור אחת (סמל של </>)
+         * 4. העתק את אובייקט ה-firebaseConfig לכאן:
          */
         const manualConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_PROJECT_ID.appspot.com",
-            messagingSenderId: "YOUR_SENDER_ID",
-            appId: "YOUR_APP_ID"
+            apiKey: "כאן_שמים_את_ה-API_KEY",
+            authDomain: "your-project.firebaseapp.com",
+            projectId: "your-project-id",
+            storageBucket: "your-project.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:abcdef"
         };
 
-        // בדיקה האם אנחנו בסביבת Canvas או ב-GitHub Pages
+        // בדיקה האם המשתמש עדכן את ההגדרות
+        const isConfigured = (cfg) => cfg.apiKey && !cfg.apiKey.includes("כאן_שמים");
+
         let firebaseConfig;
         try {
             firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : manualConfig;
@@ -181,13 +185,14 @@
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'fpv-neon-prod';
         
         let app, db, auth;
-        if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY") {
+        // מנסה לאתחל רק אם ההגדרות נראות תקינות
+        if (isConfigured(firebaseConfig)) {
             try {
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
             } catch(e) {
-                console.error("Firebase initialization failed:", e);
+                console.error("Firebase initialization error:", e);
             }
         }
 
@@ -245,8 +250,8 @@
             }
             
             if (!auth) {
-                document.getElementById('statusMsg').innerText = "שגיאת הגדרות Firebase - ערוך את manualConfig";
-                console.error("Firebase not initialized. Fill in your manualConfig object.");
+                document.getElementById('statusMsg').innerText = "שגיאת הגדרות Firebase - ערוך את manualConfig בקוד";
+                console.warn("Firebase config is missing or invalid. Check the manualConfig object.");
                 return;
             }
 
@@ -257,7 +262,8 @@
                     await signInAnonymously(auth);
                 }
             } catch (e) {
-                document.getElementById('statusMsg').innerText = "התחברות נכשלה";
+                document.getElementById('statusMsg').innerText = "התחברות נכשלה (וודא ש-Anonymous Auth מופעל ב-Firebase)";
+                console.error("Auth error:", e);
                 return;
             }
 
@@ -279,7 +285,8 @@
                     }
                 });
             }, (err) => {
-                console.error("Firestore error:", err);
+                console.error("Firestore error (Check Rules):", err);
+                document.getElementById('statusMsg').innerText = "שגיאת הרשאות Firestore";
             });
 
             initGame();
