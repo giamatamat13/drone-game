@@ -157,24 +157,20 @@
         import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        /** * הגדרות FIREBASE למולטיפלייר
-         * עליך להחליף את הערכים למטה בערכים האמיתיים מהפרויקט שלך ב-Firebase Console.
-         */
-const manualConfig = {
-            apiKey: "AIzaSyCRgKi9jEqWMWQHS2bcdLisZc3XjaAibX4",
+        /** הגדרות FIREBASE למולטיפלייר - מעודכן! */
+        const manualConfig = {
+            apiKey: "AIzaSyCRgKi9jEqMWWQHS2bcdLisZc3XjaAibX4",
             authDomain: "drone-game-cf3b2.firebaseapp.com",
             projectId: "drone-game-cf3b2",
             storageBucket: "drone-game-cf3b2.firebasestorage.app",
             messagingSenderId: "574254979628",
-            appId: "1:574254979628:web:a1be92100cf9c835274f89"
+            appId: "1:574254979628:web:0886f37226225729274f89"
         };
 
-        // פונקציית בדיקה - בודקת אם המשתמש הזין apiKey אמיתי (לא הטקסט ברירת המחדל)
         const isConfigured = (cfg) => cfg && cfg.apiKey && !cfg.apiKey.includes("כאן_שמים");
 
         let firebaseConfig;
         try {
-            // עדיפות להגדרות המערכת של Canvas, אם לא קיימות משתמשים ב-manualConfig
             firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : manualConfig;
         } catch(e) {
             firebaseConfig = manualConfig;
@@ -184,7 +180,6 @@ const manualConfig = {
         
         let app, db, auth;
         
-        // אתחול Firebase רק אם ההגדרות הוזנו
         if (isConfigured(firebaseConfig)) {
             try {
                 app = initializeApp(firebaseConfig);
@@ -249,8 +244,8 @@ const manualConfig = {
             }
             
             if (!auth) {
-                document.getElementById('statusMsg').innerText = "שגיאת הגדרות Firebase - ערוך את manualConfig בקוד";
-                console.warn("Firebase not configured properly. Update 'manualConfig' with your project details.");
+                document.getElementById('statusMsg').innerText = "שגיאת הגדרות Firebase";
+                console.warn("Firebase not configured properly.");
                 return;
             }
 
@@ -261,7 +256,7 @@ const manualConfig = {
                     await signInAnonymously(auth);
                 }
             } catch (e) {
-                document.getElementById('statusMsg').innerText = "שגיאת התחברות (וודא ש-Anonymous Auth פעיל ב-Console)";
+                document.getElementById('statusMsg').innerText = "שגיאת התחברות: " + e.message;
                 console.error("Auth error:", e);
                 return;
             }
@@ -270,7 +265,6 @@ const manualConfig = {
             isMultiplayer = true;
             document.getElementById('roomDisplay').innerText = roomCode;
 
-            // נתיב חדרים לפי הכללים: /artifacts/{appId}/public/data/{collectionName}
             const roomRef = collection(db, 'artifacts', appId, 'public', 'data', `rooms_${roomCode}`);
             
             onSnapshot(roomRef, (snapshot) => {
@@ -285,7 +279,7 @@ const manualConfig = {
                     }
                 });
             }, (err) => {
-                console.error("Firestore error (Check Rules/Path):", err);
+                console.error("Firestore error:", err);
                 document.getElementById('statusMsg').innerText = "שגיאת הרשאות במסד הנתונים";
             });
 
