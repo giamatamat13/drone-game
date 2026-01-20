@@ -55,11 +55,28 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("Difficulty set to:", level);
     };
 
-    window.startGame = function() {
+    window.resetToMenu = function() {
+        document.getElementById('gameOver').style.display = 'none';
+        document.getElementById('menu').style.display = 'flex';
+        gameState.running = false;
+        console.log("System rebooted to main menu.");
+    };
+
+window.startGame = function() {
         console.log("Arming motors... Mission started.");
+        
+        // איפוס נתוני משחק
+        gameState.score = 0;
+        gameState.obstacles = []; // ניקוי מכשולים ישנים
+        gameState.drone.y = 300;  // החזרת הרחפן למרכז
+        gameState.drone.vy = 0;
+        gameState.heightTimer = 0;
+        
         document.getElementById('menu').style.display = 'none';
+        document.getElementById('gameOver').style.display = 'none'; // הסתרת מסך הפסד
         document.getElementById('osd').style.display = 'flex';
         
+        // הגדרות קושי (נשאר כפי שהיה)
         switch(difficulty) {
             case 'easy':
                 gameState.minThrust = 1; gameState.maxThrust = 4; 
